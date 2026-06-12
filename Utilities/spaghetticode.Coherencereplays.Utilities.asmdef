@@ -1,13 +1,8 @@
 {
-    "name": "spaghetticodellc.Coherencereplayeditor.Editor",
+    "name": "spaghetticode.Coherencereplays.Utilities",
     "rootNamespace": "",
-    "references": [
-        "spaghetticode.Coherencereplays.Runtime",
-        "spaghetticode.Coherencereplays.Utilities"
-    ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "references": [],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,
