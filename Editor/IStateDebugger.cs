@@ -37,7 +37,7 @@ namespace SpaghettiCode.CoherenceReplays.Editor
     {
         public bool CanRead(string file)
         {
-            return false;
+            return true;
         }
 
         public void CompareJsons()
@@ -50,8 +50,12 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         }
 
         public void ReadJson(string file, int player)
-        {
-            Debug.Log("read: " + file); 
+        {            
+            string savePath = EditorUtility.SaveFilePanelInProject($"Save Debug Replay asset",  "New Debug Replay", "asset", $"Enter the name of this is replay", "Assets/Replays");
+            var example = ScriptableObject.CreateInstance(ReplaySettings.instance.GetReplayType());
+            example.name = "test replay asset";
+            AssetDatabase.CreateAsset(example, savePath);
+            AssetDatabase.SaveAssets();
         }
     }
 

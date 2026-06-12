@@ -13,6 +13,7 @@ namespace SpaghettiCode.CoherenceReplays.Runtime
         public string UserAssembly;
         // the name of the game state created by the user 
         public string StateClass;
+        public string ReplayClass;
         
         // returns the user generated game state type for replay tools
         public Type GetStateType()
@@ -22,6 +23,17 @@ namespace SpaghettiCode.CoherenceReplays.Runtime
             if(output == null)
             {
                 Debug.LogError($"unable to generate type from stateclass parameter: {StateClass}");
+            }
+            return output;
+        }
+
+        public Type GetReplayType()
+        {
+            var assembly = Assembly.Load(GetAssemblyString());
+            Type output = assembly.GetType(ReplayClass, true);
+            if(output == null)
+            {
+                Debug.LogError($"unable to generate type from replay parameter: {ReplayClass}");
             }
             return output;
         }

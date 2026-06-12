@@ -2,7 +2,7 @@
     "name": "spaghetticode.Coherencereplays.Runtime",
     "rootNamespace": "",
     "references": [
-        "GUID:3b73b046fdfe2c94b8ae32e59f0c2189"
+        "spaghetticode.Coherencereplays.Utilities"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
