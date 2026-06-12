@@ -1,0 +1,10 @@
+{
+    "name": "Unityyf9qi1rarrxqzg.Coherencereplayeditor.Editor",
+    "references": [
+      "Unityyf9qi1rarrxqzg.Coherencereplayeditor"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}

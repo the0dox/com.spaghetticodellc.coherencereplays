@@ -1,0 +1,14 @@
+{
+    "name": "Unityyf9qi1rarrxqzg.Coherencereplayeditor.Editor.Tests",
+    "references": [
+        "Unityyf9qi1rarrxqzg.Coherencereplayeditor.Editor",
+        "Unityyf9qi1rarrxqzg.Coherencereplayeditor"
+    ],
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": []
+}
