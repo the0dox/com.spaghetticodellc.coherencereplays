@@ -87,7 +87,7 @@ namespace SpaghettiCode.CoherenceReplays.Editor
     // this is the
     public class StateDebuggerDeep<TGameState, TReplay> : IStateDebugger where TReplay : Replay<TGameState> where TGameState : struct
     {
-        private const string ASSETEXTENSION = "Assets/Debug/Replays";
+        private const string ASSETEXTENSION = "Assets/";
         private const int NUMPLAYERS = 2;
         // frames are arranged in two parallel arrays for simple comparision 
         private FrameSampleWrapper<TGameState>[][] _data = new FrameSampleWrapper<TGameState>[NUMPLAYERS][];
@@ -149,22 +149,20 @@ namespace SpaghettiCode.CoherenceReplays.Editor
             Debug.Assert(_data[0][i].Frame == _data[1][j].Frame, $"should produce the same frame, instead got {i} {j} : {_data[0][i].Frame} != {_data[1][j].Frame}");
             string savePath = EditorUtility.SaveFilePanelInProject($"Save Debug Replay asset",  "New Debug Replay", "asset", $"Enter the name of this is replay", ASSETEXTENSION);
             int insertIndex = savePath.LastIndexOf('.');
-            var replay0 = ExportReplay(savePath.Insert(insertIndex, "_p0"), ref _data[0]);
-            var replay1 = ExportReplay(savePath.Insert(insertIndex, "_p1"), ref _data[1]);
-            replay0.TrimToFirstInput(i);
-            replay1.TrimToFirstInput(j);
+            var replay0 = ExportReplay(savePath.Insert(insertIndex, "_p0"), _data[0], i);
+            var replay1 = ExportReplay(savePath.Insert(insertIndex, "_p1"), _data[1], j);
             replay0.FailureFrame = -1;
             replay1.FailureFrame = -1;
             bool desync = false;
             while(!desync && i < _data[0].Length && j < _data[1].Length)
             {
-                //Debug.Log($"comparing p1 {_data[0][i]} and p1 {_data[1][j]}");
+                Debug.Log($"comparing p1 {_data[0][i]} and p1 {_data[1][j]}");
                 if(_data[0][i].Hash != null && !_data[0][i].Hash.Equals(_data[1][j].Hash))
                 {
                     int minFailureFrame = Mathf.Min(i,j);
                     Debug.LogWarning($"Found Desync {minFailureFrame} frames into simluation long: {_data[0][i].Frame}\n p1 Hash: {_data[0][i].Hash} p2 Hash: {_data[1][j].Hash} ");
-                    replay0.FailureFrame = (minFailureFrame);
-                    replay1.FailureFrame = (minFailureFrame);
+                    SetFailureFrame(replay0,  minFailureFrame);
+                    SetFailureFrame(replay1,  minFailureFrame);
                     desync = true;
                 }
 
@@ -181,37 +179,36 @@ namespace SpaghettiCode.CoherenceReplays.Editor
             AssetDatabase.SaveAssets();
         }
 
-        private TReplay ExportReplay(string name, ref FrameSampleWrapper<TGameState>[] gameplayRecord)
+        private TReplay ExportReplay(string name, FrameSampleWrapper<TGameState>[] deseraizliedRecord, int startIndex)
         {
-            /*
-            InputValue[][] playerInputs = new InputValue[2][]{new InputValue[inputLength], new InputValue[inputLength]};
-            GameSimulationState[] initalStates = new GameSimulationState[inputLength];
-            ReplayMetaState[] metaStates = new ReplayMetaState[inputLength];
+            var replay = ScriptableObject.CreateInstance<TReplay>();
+            int inputLength = deseraizliedRecord.Length - startIndex;
+            //InputValue[][] playerInputs = new InputValue[2][]{new InputValue[inputLength], new InputValue[inputLength]};
+            replay.States = new ReplayFrame<TGameState>[inputLength];
             int playerIndex;
-            for(int i = 0; i < inputLength; i++)
+            for(int i = 0; i < replay.States.Length; i++)
             {
+                var deserialiedFrame = deseraizliedRecord[i + startIndex];
                 playerIndex = 0; 
-                bool wasUpdated = gameplayRecord[i].UpdatedInputs != null && gameplayRecord[i].UpdatedInputs.Count > 0;
+                bool wasUpdated = deserialiedFrame.UpdatedInputs != null && deserialiedFrame.UpdatedInputs.Count > 0;
                 if(wasUpdated)
                 {
                     Debug.Log($"found updated inputs in {name} at {i}" );
                 }
-                foreach(var kvp in wasUpdated ? gameplayRecord[i].UpdatedInputs : gameplayRecord[i].InitialInputs)
+                foreach(var kvp in wasUpdated ? deserialiedFrame.UpdatedInputs : deserialiedFrame.InitialInputs)
                 {
-                    playerInputs[playerIndex][i] = ParseInputValue(kvp.Value);
+                    //playerInputs[playerIndex][i] = ParseInputValue(kvp.Value);
                     
                     playerIndex++;
                 }
-                initalStates[i] = wasUpdated ? gameplayRecord[i].UpdatedState : gameplayRecord[i].InitialState;
-                metaStates[i] = new ReplayMetaState(wasUpdated, gameplayRecord[i].EventData);
+                replay.States[i] = new ReplayFrame<TGameState>();
+                replay.States[i].InitalState = (TGameState)(wasUpdated ? deserialiedFrame.UpdatedState : deserialiedFrame.InitialState);
+                replay.States[i].MetaState = CreateMetaState(wasUpdated, deserialiedFrame);
             }
-            */
-            var replay = ScriptableObject.CreateInstance<TReplay>();
             AssetDatabase.CreateAsset(replay, name);
             //replay.Inputs = new InputRecordTemplate[playerInputs.Length];
             //replay.InitalState = initalStates; 
             //replay.SetDefaultEnvrionmentSettings();
-            //replay.Events = metaStates;
             //SaveInputRecords(name, ref playerInputs, replay, false);
             return replay;
         }
@@ -228,6 +225,18 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                 return result != 0;
             }
             throw new ArgumentException($"unable to parse int from {trimmedToken}");
+        }
+        
+
+        public ReplayMetaState CreateMetaState(bool wasUpdated, FrameSampleWrapper<TGameState> deserializedReference)
+        {
+            ReplayMetaState output = new ReplayMetaState();
+            output.WasUpdated = wasUpdated;
+            output.EventData = ParseEventData(deserializedReference);
+            output.Hash = deserializedReference.Hash;
+            output.GameFrame = deserializedReference.Frame;
+            output.HasEvents = wasUpdated || !string.IsNullOrEmpty(output.EventData);
+            return output;
         }
 
         /*
@@ -265,8 +274,6 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         // we identify which player is 'ahead' and have the other player's index 'catch' up by the difference
         private void FindFirstCommonIndex(out int i, out int j)
         {
-            Debug.Assert(_data[0][0] != null, "p0 data first entry is null");
-            Debug.Assert(_data[1][0] != null, "p1 data first entry is null");
             i = 0;
             Debug.Log($"{i}, {_data[0].Length} {_data[1].Length}");
             j = (int)(_data[0][0].Frame - _data[1][0].Frame);
@@ -275,23 +282,35 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                 i = -j;
                 j = 0;
             }
+            Debug.Log("start indexes are " + i + " and " + j);
         }
 
         // as event data is very generic, we simply the type into a string of all event data printed that frame
         // returns all event data associated with json serialized frame sample
-        private void ParseEventData(ref FrameSampleWrapper<TGameState>  sample)
+        private string ParseEventData(FrameSampleWrapper<TGameState> sample)
         {
             StringBuilder output = new StringBuilder();
-            foreach(var evt in sample.AdditionalData)
+            if(sample.AdditionalData.TryGetValue("Events", out JToken eventsJtoken))
             {
-                string evtName = evt.Value.ToString();
-                if(!evtName.Equals("InputSent") && !evtName.Equals("InputReceived"))
+                foreach(JToken evt in eventsJtoken)
                 {
-                    Debug.Log($"found unique event: w/ name {evtName} " + evt);
-                    output.Append(evt);
+                    string evtName = evt["Event"].ToString();
+                    if(!evtName.Equals("InputSent") && !evtName.Equals("InputReceived"))
+                    {
+                        Debug.Log($"found unique event: w/ name {evtName} " + evt);
+                        output.Append(evt);
+                    }
                 }
             }
-            sample.EventData = output.ToString();
+            return output.ToString();
+        }
+
+        private static void SetFailureFrame(Replay<TGameState> target, int frame)
+        {
+            target.FailureFrame = frame;
+            ReplayMetaState existingMetaState = target.States[frame].MetaState;
+            existingMetaState.FirstDesync = true;
+            target.States[frame].MetaState = existingMetaState;
         }
     }
     
