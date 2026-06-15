@@ -26,14 +26,38 @@ namespace SpaghettiCode.CoherenceReplays.Editor
 
         public static IStateDebugger CreateStateDebugger()
         {
-            Type genericLibrary = typeof(NullStateDebugger<>);
-            Type constructedLibrary = genericLibrary.MakeGenericType(ReplaySettings.instance.GetStateType());
-            return Activator.CreateInstance(constructedLibrary) as IStateDebugger;
-
+            try
+            {
+                Type genericLibrary = typeof(StateDebuggerDeep<,>);
+                Type constructedLibrary = genericLibrary.MakeGenericType(ReplaySettings.instance.GetStateType(), ReplaySettings.instance.GetReplayType());
+                return Activator.CreateInstance(constructedLibrary) as IStateDebugger;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("failed to create a generic state debugger exception, did you set up your replay and simulation types correctly? " + e);
+                return new NullStateDebugger();
+            }
         }
     }
 
-    public class NullStateDebugger<TGameState> : IStateDebugger
+    public class NullStateDebugger : IStateDebugger
+    {
+        public bool CanRead(string file)
+        {
+            return false;
+        }
+
+        public void CompareJsons()
+        {
+        }
+
+        public void ReadJson(string file, int player)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    public class TestNullStateDebugger<TGameState> : IStateDebugger
     {
         public bool CanRead(string file)
         {
@@ -44,7 +68,7 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         {
         }
 
-        public NullStateDebugger()
+        public TestNullStateDebugger()
         {
             Debug.Log("created debugger with generic argument: " + typeof(TGameState).Name);
         }
@@ -61,12 +85,12 @@ namespace SpaghettiCode.CoherenceReplays.Editor
 
 
     // this is the
-    public class StateDebuggerDeep<TGameState> : IStateDebugger
+    public class StateDebuggerDeep<TGameState, TReplay> : IStateDebugger where TReplay : Replay<TGameState> where TGameState : struct
     {
         private const string ASSETEXTENSION = "Assets/Debug/Replays";
         private const int NUMPLAYERS = 2;
         // frames are arranged in two parallel arrays for simple comparision 
-        private readonly FrameSample[][] _data = new FrameSample[NUMPLAYERS][];
+        private FrameSampleWrapper<TGameState>[][] _data = new FrameSampleWrapper<TGameState>[NUMPLAYERS][];
         // used to confirm there are no duplicate files being compared
         private readonly string[] _paths = new string[NUMPLAYERS];
 
@@ -76,34 +100,27 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         public void ReadJson(string file, int player)
         {
             _paths[player] = file;
-            var output = JsonConvert.DeserializeObject<SortedDictionary<long, JToken>>(File.ReadAllText(file));
-            _data[player] = new FrameSample[output.Count];
+            var output = JsonConvert.DeserializeObject<SortedDictionary<long, FrameSampleWrapper<TGameState>>>(File.ReadAllText(file));
+            _data[player] = new FrameSampleWrapper<TGameState>[output.Count];
+            Debug.Log(_data[player].Length);
             int index = 0;
-            foreach(KeyValuePair<long, JToken> kvp in output)
+            foreach(KeyValuePair<long, FrameSampleWrapper<TGameState>> kvp in output)
             {
                 try
                 {
                     if(kvp.Key == 0)
                     {
-                        //Debug.Log($"found invalid message at head {kvp.Value} ignoring");
+                        Debug.Log($"found invalid message at head {kvp.Value} ignoring");
                         continue;
                     }
-                    string evtText = ParseEventData(kvp.Value);
-                    if(kvp.Value["InitialState"] != null)
+                    if(kvp.Value.InitialState == null)
                     {
-                        if(string.IsNullOrEmpty(evtText))
-                        {
-
-                        }
-                        //Debug.Log($"head was found to have a null inital state {kvp.Value} ignoring");
+                        Debug.Log($"head was found to have a null inital state {kvp.Value} ignoring");
                         continue;
                     }
                     else
                     {
-                        FrameSample currentState = kvp.Value.ToObject<FrameSample>();
-                        currentState.EventData = evtText;
-                        currentState.Frame = kvp.Key;
-                        _data[player][index] = currentState;
+                        _data[player][index] = kvp.Value;
                     }
                 }
                 catch(Exception e)
@@ -114,6 +131,7 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                 }
                 index++;
             }
+            Debug.Log($"resizing to index {index}");
             Array.Resize(ref _data[player], index);
         }
 
@@ -127,7 +145,6 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         // reads through the contents and compares out all of the state hashes, identifying the first point of inaccuracy  
         public void CompareJsons()
         {
-            #if UNITY_EDITOR
             FindFirstCommonIndex(out int i, out int j);
             Debug.Assert(_data[0][i].Frame == _data[1][j].Frame, $"should produce the same frame, instead got {i} {j} : {_data[0][i].Frame} != {_data[1][j].Frame}");
             string savePath = EditorUtility.SaveFilePanelInProject($"Save Debug Replay asset",  "New Debug Replay", "asset", $"Enter the name of this is replay", ASSETEXTENSION);
@@ -138,8 +155,8 @@ namespace SpaghettiCode.CoherenceReplays.Editor
             replay1.TrimToFirstInput(j);
             replay0.FailureFrame = -1;
             replay1.FailureFrame = -1;
-            bool finished = false;
-            while(!finished && i < _data[0].Length && j < _data[1].Length)
+            bool desync = false;
+            while(!desync && i < _data[0].Length && j < _data[1].Length)
             {
                 //Debug.Log($"comparing p1 {_data[0][i]} and p1 {_data[1][j]}");
                 if(_data[0][i].Hash != null && !_data[0][i].Hash.Equals(_data[1][j].Hash))
@@ -148,24 +165,24 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                     Debug.LogWarning($"Found Desync {minFailureFrame} frames into simluation long: {_data[0][i].Frame}\n p1 Hash: {_data[0][i].Hash} p2 Hash: {_data[1][j].Hash} ");
                     replay0.FailureFrame = (minFailureFrame);
                     replay1.FailureFrame = (minFailureFrame);
-                    finished = true;
+                    desync = true;
                 }
 
                 i++;
                 j++;
             }
+            if(!desync)
+            {
+                Debug.Log("No desyncs Found!");
+            }
             replay0.AssignOther(replay1);
             EditorUtility.SetDirty(replay0);
             EditorUtility.SetDirty(replay1);
             AssetDatabase.SaveAssets();
-            #endif
         }
 
-        private Replay<TGameState> ExportReplay(string name, ref FrameSample[] gameplayRecord)
+        private TReplay ExportReplay(string name, ref FrameSampleWrapper<TGameState>[] gameplayRecord)
         {
-            //MultiplayerReplay output = new MultiplayerReplay();
-            //output.name = $"P{index}'s test replay";
-            int inputLength = gameplayRecord.Length;
             /*
             InputValue[][] playerInputs = new InputValue[2][]{new InputValue[inputLength], new InputValue[inputLength]};
             GameSimulationState[] initalStates = new GameSimulationState[inputLength];
@@ -188,16 +205,15 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                 initalStates[i] = wasUpdated ? gameplayRecord[i].UpdatedState : gameplayRecord[i].InitialState;
                 metaStates[i] = new ReplayMetaState(wasUpdated, gameplayRecord[i].EventData);
             }
-            var replay = ScriptableObject.CreateInstance<MultiplayerReplay>();
-            AssetDatabase.CreateAsset(replay, name);
-            replay.Inputs = new InputRecordTemplate[playerInputs.Length];
-            replay.InitalState = initalStates; 
-            replay.SetDefaultEnvrionmentSettings();
-            replay.Events = metaStates;
-            SaveInputRecords(name, ref playerInputs, replay, false);
-            AssetDatabase.SaveAssets();
             */
-            return new Replay<TGameState>();
+            var replay = ScriptableObject.CreateInstance<TReplay>();
+            AssetDatabase.CreateAsset(replay, name);
+            //replay.Inputs = new InputRecordTemplate[playerInputs.Length];
+            //replay.InitalState = initalStates; 
+            //replay.SetDefaultEnvrionmentSettings();
+            //replay.Events = metaStates;
+            //SaveInputRecords(name, ref playerInputs, replay, false);
+            return replay;
         }
 
         // checks the first input entry to see if inputs are reveresed or not
@@ -249,7 +265,10 @@ namespace SpaghettiCode.CoherenceReplays.Editor
         // we identify which player is 'ahead' and have the other player's index 'catch' up by the difference
         private void FindFirstCommonIndex(out int i, out int j)
         {
+            Debug.Assert(_data[0][0] != null, "p0 data first entry is null");
+            Debug.Assert(_data[1][0] != null, "p1 data first entry is null");
             i = 0;
+            Debug.Log($"{i}, {_data[0].Length} {_data[1].Length}");
             j = (int)(_data[0][0].Frame - _data[1][0].Frame);
             if(j < 0)
             {
@@ -260,59 +279,59 @@ namespace SpaghettiCode.CoherenceReplays.Editor
 
         // as event data is very generic, we simply the type into a string of all event data printed that frame
         // returns all event data associated with json serialized frame sample
-        private string ParseEventData(JToken sample)
+        private void ParseEventData(ref FrameSampleWrapper<TGameState>  sample)
         {
             StringBuilder output = new StringBuilder();
-            foreach(var evt in sample["Events"])
+            foreach(var evt in sample.AdditionalData)
             {
-                string evtName = evt["Event"].ToString();
+                string evtName = evt.Value.ToString();
                 if(!evtName.Equals("InputSent") && !evtName.Equals("InputReceived"))
                 {
                     Debug.Log($"found unique event: w/ name {evtName} " + evt);
                     output.Append(evt);
                 }
             }
-            return output.ToString();
+            sample.EventData = output.ToString();
         }
-            
-        private class FrameSample
-        {
-            public long Frame;
+    }
+    
+    [System.Serializable]
+    public class FrameSampleWrapper<TGameState> where TGameState : struct
+    {
+        public long Frame;
 
-            public long AckFrame;
+        public long AckFrame;
 
-            public long ReceiveFrame;
+        public long ReceiveFrame;
 
-            public long AckedAt;
+        public long AckedAt;
 
-            public long MispredictionFrame;
+        public long MispredictionFrame;
 
-            public string Hash;
+        public string Hash;
 
-            public string Time;
+        public string Time;
 
-            //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public long UpdatedAt;
+        //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public long UpdatedAt;
 
-            //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public bool ShouldPause;
+        //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public bool ShouldPause;
 
-            //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public TGameState UpdatedState;
+        //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public TGameState? UpdatedState;
 
-            //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-            public Dictionary<string, string> UpdatedInputs;
+        //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public Dictionary<string, string> UpdatedInputs;
 
-            public TGameState InitialState;
+        public TGameState? InitialState;
 
-            public Dictionary<string, string> InitialInputs;
+        public Dictionary<string, string> InitialInputs;
 
-            public string EventData;
+        public string EventData;
 
-            //public Dictionary<string, InputBufferState> InputBufferStates;
-
-            //[JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
-            //public List<EventData> Events;
-        }
+        //public Dictionary<string, InputBufferState> InputBufferStates;
+        [JsonExtensionData]
+        public IDictionary<string, JToken> AdditionalData { get; set;}
     }
 }
