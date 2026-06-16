@@ -21,7 +21,7 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
         private static readonly string assetPath = "/Assets";
 
         // prompts the user to open a json file in the project folder
-        [MenuItem("coherence/replays/Import Json")]
+        [MenuItem("coherence/Replays/Import Json")]
         public static void Open()
         {
             string file = Application.dataPath.Substring(0, Application.dataPath.Length - assetPath.Length);

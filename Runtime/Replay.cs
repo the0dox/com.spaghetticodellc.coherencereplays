@@ -1,11 +1,15 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-public class Replay<T> : ScriptableObject
+public class Replay<T> : ScriptableObject, IReplay
 {
+    IReplay IReplay.Other => Other;
+    int IReplay.FailureFrame => FailureFrame;
+
     public int FailureFrame;
     public Replay<T> Other;
     public ReplayFrame<T>[] States;
+    public int Duration => Mathf.Max(Other.States.Length, States.Length);
 
     public void TrimToFirstInput(int i)
     {
@@ -16,6 +20,32 @@ public class Replay<T> : ScriptableObject
     {
         Other = otherReplay;
         otherReplay.Other = this;
+    }
+
+    public int NextEventIndex(int startingIndex)
+    {
+        startingIndex = Mathf.Clamp(startingIndex + 1, 0, Duration);
+        for(int i = startingIndex; i < Duration; i++)
+        {
+            if(States[i].MetaState.HasEvents)
+            {
+                return i;
+            }
+        }
+        return Duration;
+    }
+
+    public int PreviousEventIndex(int startingIndex)
+    {
+        startingIndex = Mathf.Clamp(startingIndex - 1, 0, Duration);
+        for(int i = startingIndex; i >= 0; i--)
+        {
+            if(States[i].MetaState.HasEvents)
+            {
+                return i;
+            }
+        }
+        return 0;
     }
 }
 
@@ -35,4 +65,14 @@ public struct ReplayMetaState
     public string EventData;
     public long GameFrame;
     public string Hash;
+}
+
+public interface IReplay
+{
+    public int Duration {get;}
+    public IReplay Other {get;}
+    public int FailureFrame {get;}
+    public int PreviousEventIndex(int startingIndex);
+    public int NextEventIndex(int startingIndex);
+
 }
