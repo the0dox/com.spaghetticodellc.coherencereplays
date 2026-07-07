@@ -39,6 +39,13 @@ namespace SpaghettiCode.CoherenceReplays.Runtime
             return output;
         }
 
+        public IReplayPlayer CreateGenericReplayPlayer(object arg)
+        {
+            Type genericLibrary = typeof(ReplaySimulationPlayer<>);
+            Type constructedLibrary = genericLibrary.MakeGenericType(ReplaySettings.instance.GetStateType());
+            return Activator.CreateInstance(constructedLibrary, arg) as IReplayPlayer;
+        }
+
         // returns the user definied assembly where the game state resides, or default if not provided
         private string GetAssemblyString()
         {

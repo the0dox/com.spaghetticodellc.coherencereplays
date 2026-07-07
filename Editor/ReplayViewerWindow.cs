@@ -111,12 +111,18 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
         {
             _display = false;
             ActiveSelection = newObj;
-            m_currentReplay = ActiveSelection as IReplay;
+            SetReplay(ActiveSelection as IReplay);
+            AttachToHarness(ActiveSelection as IReplayHarness);
+        }
+
+        // sets the replay to this window allowing it to be displayed
+        public void SetReplay(IReplay replay)
+        {
+            m_currentReplay = replay;
             if(m_currentReplay != null)
             {
                 DisplayFrameOfReplay(m_currentReplay.FailureFrame);  
             }
-            AttachToHarness(ActiveSelection as IReplayHarness);
         }
 
         // attaches to another harness, updating display if the other harness updates its representation

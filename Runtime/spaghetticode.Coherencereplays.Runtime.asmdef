@@ -2,7 +2,8 @@
     "name": "spaghetticode.Coherencereplays.Runtime",
     "rootNamespace": "",
     "references": [
-        "spaghetticode.Coherencereplays.Utilities"
+        "spaghetticode.Coherencereplays.Utilities",
+        "Coherence.Toolkit"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

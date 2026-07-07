@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using Coherence.Toolkit;
+using SpaghettiCode.CoherenceReplays.Runtime;
 using UnityEngine;
 
-public class Replay<T> : ScriptableObject, IReplay
+public abstract class Replay<T> : ScriptableObject, IReplay
 {
     IReplay IReplay.Other => Other;
     int IReplay.FailureFrame => FailureFrame;
@@ -48,6 +50,8 @@ public class Replay<T> : ScriptableObject, IReplay
         }
         return 0;
     }
+
+    public abstract void LoadReplayInSingleplayer(GameObject ClientPrefab, CoherenceInputSimulation<T> Simulator);
 }
 
 [System.Serializable]
@@ -85,6 +89,15 @@ public interface IReplayHarness
     public IReplay CurrentReplay {get;}
     public event EventHandler<ReplayPlayedEvent> Updated;
     public void AttachToHarness(IReplayHarness Other);
+    public void SetReplay(IReplay replayAsset);
+}
+
+public interface IReplayPlayer : IReplayHarness
+{
+    public int Frame {get;}
+    public bool Play {get; set;}
+    public void AdvanceFrame();
+    public void SetFrame(int frame);
 }
 
 public class ReplayPlayedEvent : EventArgs
