@@ -7,6 +7,7 @@ namespace SpaghettiCode.CoherenceReplays.Runtime
 {
     // singleton for saving user preferences in with coherence replays
     // required allowing the state debugger to find the correct game state
+    [FilePath("ProjectSettings/ReplaySettings.asset", FilePathAttribute.Location.ProjectFolder)]
     public class ReplaySettings : ScriptableSingleton<ReplaySettings>
     {
         // the assembly where user definied types reside
@@ -42,6 +43,11 @@ namespace SpaghettiCode.CoherenceReplays.Runtime
         private string GetAssemblyString()
         {
             return String.IsNullOrEmpty(UserAssembly) ? "Assembly-CSharp" : UserAssembly;
+        }
+
+        public void OnInspectorClosed()
+        {
+            instance.Save(false);
         }
     }
 }

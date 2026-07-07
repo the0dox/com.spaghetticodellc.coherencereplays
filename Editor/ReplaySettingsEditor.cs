@@ -4,8 +4,10 @@ using UnityEditor;
 
 namespace SpaghettiCode.CoherenceReplays.Editor
 {
+    using System;
     using System.IO;
     using UnityEditor;
+    using UnityEditor.Search;
     using UnityEngine;
 
     class MyCustomSettingsProvider : SettingsProvider
@@ -38,17 +40,47 @@ namespace SpaghettiCode.CoherenceReplays.Editor
                 s_CachedEditor.serializedObject.Update();
                 s_CachedEditor.OnInspectorGUI();
                 s_CachedEditor.serializedObject.ApplyModifiedProperties();
+
+                if(GUILayout.Button("Select Simulation Class"))
+                {        
+                    var context = SearchService.CreateContext("t:monoscript");
+                    SearchService.ShowPicker(context, selectHandler: (a,b) => {
+                        var type = GetTypeFromFile(a);
+                        ReplaySettings.instance.StateClass = type.Name;
+                        ReplaySettings.instance.UserAssembly = type.Assembly.GetName().Name;
+                        });
+                }
+
+                if(GUILayout.Button("Select Replay Class"))
+                {        
+                    var context = SearchService.CreateContext("t:monoscript");
+                    SearchService.ShowPicker(context, selectHandler: (a,b) => {
+                        ReplaySettings.instance.ReplayClass = GetTypeFromFile(a).Name;
+                        });
+                }
             }
+        }
+
+        public static Type GetTypeFromFile(SearchItem e)
+        {
+            MonoScript monoScript =  (MonoScript)e.ToObject();
+            return monoScript.GetClass();
+        }
+
+        public override void OnDeactivate()
+        {
+            ReplaySettings.instance.OnInspectorClosed();
+            base.OnDeactivate();
         }
 
         // Registers the customized settings drawer loop into the global Unity registry
         [SettingsProvider]
         public static SettingsProvider CreateMyCustomSettingsProvider()
         {
-            var provider = new MyCustomSettingsProvider("Project/My Custom Settings", SettingsScope.Project);
+            var provider = new MyCustomSettingsProvider("Project/coherenceReplays", SettingsScope.Project);
 
             // Sets up standard string matching terms for the global settings search bar
-            provider.keywords = new string[] { "Custom", "Server", "API", "Connections" };
+            provider.keywords = new string[] { "Replays", "Extensions", "Json", "Debugging", "Coherence" };
             return provider;
         }
     }
