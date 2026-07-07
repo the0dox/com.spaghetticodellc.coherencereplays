@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,7 +10,7 @@ public class Replay<T> : ScriptableObject, IReplay
     public int FailureFrame;
     public Replay<T> Other;
     public ReplayFrame<T>[] States;
-    public int Duration => Mathf.Max(Other.States.Length, States.Length);
+    public int Duration => Mathf.Min(Other.States.Length, States.Length);
 
     public void TrimToFirstInput(int i)
     {
@@ -69,10 +70,25 @@ public struct ReplayMetaState
 
 public interface IReplay
 {
+    public string name {get;}
     public int Duration {get;}
     public IReplay Other {get;}
     public int FailureFrame {get;}
     public int PreviousEventIndex(int startingIndex);
     public int NextEventIndex(int startingIndex);
 
+}
+
+// used by components and editors that can 'play' replays
+public interface IReplayHarness
+{
+    public IReplay CurrentReplay {get;}
+    public event EventHandler<ReplayPlayedEvent> Updated;
+    public void AttachToHarness(IReplayHarness Other);
+}
+
+public class ReplayPlayedEvent : EventArgs
+{
+    public IReplay CurrentReplay;
+    public int Frame;
 }
