@@ -47,6 +47,10 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
         bool advancedReplayControls;
         IReplay CurrentReplay;
         ReplayMetaState[] updatedSide = new ReplayMetaState[2];
+
+        // used to trim down property paths when comparing baseline to incomming state. We only care about seralizied properties deeper than:
+        // Data.States.Array[]. so we trim the first 3 '.' dots in the structure
+        private static readonly int RELATIVEPROPERTYDEPTH = 3;
         
         public override void OnDisable()
         {
@@ -95,18 +99,19 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
                 incoming = m_target.FindProperty("States").GetArrayElementAtIndex(newFrame);
                 baseline = new SerializedObject(tempObj).FindProperty("States").GetArrayElementAtIndex(newFrame);
                 Debug.Log("found valid Replay", Context);
-                /*
-                frame = Mathf.Clamp(newFrame, 0, replay.States.Length - 1);
-                baseline = replay.States[frame].InitalState;
-                incoming = replay.Other.States[frame].InitalState;
-                */
+
                 _display = true;
-                /*
-                updatedSide = new ReplayMetaState[2];
-                updatedSide[0] = replay.States[frame].MetaState;
-                updatedSide[1] = replay.Other.States[frame].MetaState;
-                advancedReplayControls = true;
-                */
+
+                Debug.Log(incoming.name);
+                foreach(SerializedProperty prop in incoming)
+                {
+                    Debug.Log("inc prop name" + prop.displayName);
+                }
+                Debug.Log(baseline.name);
+                foreach(SerializedProperty prop in baseline)
+                {
+                    Debug.Log("base prop name" + prop.displayName);
+                }
                 DetermineMismatchedProperties();
                 HashCompare();
             }
@@ -117,8 +122,8 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
         {
             try
             {
-                baselineHash = incoming.FindPropertyRelative("MetaState").FindPropertyRelative("Hash").stringValue;
-                incomingHash = baseline.FindPropertyRelative("MetaState").FindPropertyRelative("Hash").stringValue;
+                baselineHash = baseline.FindPropertyRelative("MetaState").FindPropertyRelative("Hash").stringValue;
+                incomingHash = incoming.FindPropertyRelative("MetaState").FindPropertyRelative("Hash").stringValue;
                 hashFail = !baselineHash.Equals(incomingHash);
             }
             catch(NullReferenceException)
@@ -216,7 +221,7 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
                 scrollPosition = GUILayout.BeginScrollView(scrollPosition);	
                 
                 var p1 = baseline.Copy();
-                var p2 = baseline.Copy();
+                var p2 = incoming.Copy();
                 
                 EditorGUILayout.BeginHorizontal();
 
@@ -344,10 +349,12 @@ namespace  SpaghettiCode.CoherenceReplays.Editor
         private SerializedProperty GetBaselineProperty(SerializedProperty incoming)
         {
             string baseLinePath = incoming.propertyPath;
-            baseLinePath = "baseline" + baseLinePath.Substring(baseLinePath.IndexOf('.'));
-            //Debug.Log($"getting baseline property incomnming {incoming.propertyPath} -> " + baseLinePath);
-            Debug.Assert(m_this.FindProperty(baseLinePath) != null, $"baseline property {baseLinePath} not found");
-            return m_this.FindProperty(baseLinePath); 
+            for(int i = 0; i < RELATIVEPROPERTYDEPTH; i++)
+            {
+                baseLinePath = baseLinePath.Substring(baseLinePath.IndexOf('.') + 1);
+            }
+            Debug.Assert(baseline.FindPropertyRelative(baseLinePath) != null, $"baseline property {baseLinePath} not found");
+            return baseline.FindPropertyRelative(baseLinePath); 
         }
 
     }
